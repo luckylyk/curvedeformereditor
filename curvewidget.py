@@ -2,20 +2,35 @@ import math
 from PyQt5 import QtGui, QtCore, QtWidgets
 
 
+DEFAULT_SIZE = 350, 125
+MINIMUM_SIZE = 200, 100
+DEFAULT_POINTS = [
+    {
+        'center': (0, 0),
+        'in': (-(DEFAULT_SIZE[0] / 3), 0),
+        'out':((DEFAULT_SIZE[0] / 3), 0)
+    },
+    {
+        'center': (DEFAULT_SIZE[0], DEFAULT_SIZE[1]),
+        'in': (DEFAULT_SIZE[0] - (DEFAULT_SIZE[0] / 3), DEFAULT_SIZE[1]),
+        'out': (DEFAULT_SIZE[0] + (DEFAULT_SIZE[0] / 3), DEFAULT_SIZE[1])
+    }
+]
+print(DEFAULT_POINTS[0]['in'], DEFAULT_POINTS[0]['out'])
+
+
 class InfluenceCurveWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(InfluenceCurveWidget, self).__init__(parent)
+        self.setMinimumSize(*MINIMUM_SIZE)
+        self.resize(*DEFAULT_SIZE)
+
         self.setMouseTracking(True)
         self.is_clicked = False
         self.point_to_move = None
         self.key_to_move = None
-        self.points = [
-            {
-                'center': (150, 150),
-                'in': (150, 130),
-                'out': (150, 170)
-            }
-        ]
+        self.noresize = True
+        self.points = [d.copy() for d in DEFAULT_POINTS]
 
     def mouseMoveEvent(self, _):
         if self.is_clicked is False:
@@ -69,6 +84,8 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
         self.repaint()
 
     def resizeEvent(self, event):
+        if self.noresize is True:
+            return
         for pointdata in self.points:
             pointdata['center'] = move_point_from_rect_resized(
                 pointdata['center'], event.oldSize(), event.size())
@@ -87,6 +104,9 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
             draw_point(painter, point)
         draw_line(painter, self.points)
 
+    def show(self):
+        super(InfluenceCurveWidget, self).show()
+        self.noresize = False
 
 def find_point_to_move(pointdatas, position, precision=8):
     for pointdata in pointdatas:
