@@ -1,5 +1,5 @@
 import math
-from PyQt5 import QtGui, QtCore, QtWidgets
+from PySide2 import QtGui, QtCore, QtWidgets
 
 
 DEFAULT_SIZE = 350, 125
@@ -28,21 +28,33 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.is_clicked = False
         self.point_to_move = None
+        self.point_to_move_is_boundary = None
         self.key_to_move = None
         self.noresize = True
         self.points = [d.copy() for d in DEFAULT_POINTS]
 
     def mouseMoveEvent(self, _):
+
         if self.is_clicked is False:
             return
         if not self.point_to_move:
             return
         center = self.point_to_move['center']
         cursor = self.mapFromGlobal(QtGui.QCursor.pos())
-        inx = self.point_to_move['in'][0] + cursor.x() - center[0]
-        iny = self.point_to_move['in'][1] + cursor.y() - center[1]
+        x = center[0]
+        y = cursor.y()
+        inx = self.point_to_move['in'][0]
+        if not self.point_to_move_is_boundary:
+            x = cursor.x()
+            inx += cursor.x() - center[0]
+        else:
+            if y < 0:
+                y = 0
+            if y > self.rect().bottom():
+                y = self.rect().bottom()
+        iny = self.point_to_move['in'][1] + y - center[1]
         if self.key_to_move == 'center':
-            self.point_to_move['center'] = cursor.x(), cursor.y()
+            self.point_to_move['center'] = x, y
             self.point_to_move['in'] = inx, iny
             self.point_to_move['out'] = get_opposite_tangent(
                 QtCore.QPointF(*self.point_to_move['center']),
@@ -50,7 +62,7 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
             self.repaint()
             return
         relative = 'out' if self.key_to_move == 'in' else 'in'
-        self.point_to_move[self.key_to_move] = cursor.x(), cursor.y()
+        self.point_to_move[self.key_to_move] = cursor.x(), y
         self.point_to_move[relative] = get_opposite_tangent(
             QtCore.QPointF(*self.point_to_move['center']),
             QtCore.QPointF(*self.point_to_move[self.key_to_move]))
@@ -58,7 +70,7 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
 
     def mousePressEvent(self, event):
         self.is_clicked = True
-        point, key = find_point_to_move(self.points, event.pos())
+        point, key, index = find_point_to_move(self.points, event.pos())
         if point is None:
             position = event.pos()
             point = {
@@ -69,18 +81,19 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
             key = 'center'
         self.point_to_move = point
         self.key_to_move = key
+        is_boundary = index == 0 or index == len(self.points) - 1
+        self.point_to_move_is_boundary = is_boundary
 
-    def mouseReleaseEvent(self, _):
+    def mouseReleaseEvent(self, event):
         self.is_clicked = False
-        self.point_to_move = None
-
-    def leaveEvent(self, _):
-        print (self.point_to_move)
-        if self.key_to_move == 'center':
-            if self.point_to_move in self.points:
-                print('leave')
+        if self.point_to_move is None:
+            return
+        if not self.rect().contains(event.pos()):
+            if not self.point_to_move_is_boundary:
                 self.points.remove(self.point_to_move)
-                self.point_to_move = None
+                'removed'
+        self.point_to_move = None
+        self.point_to_move_is_boundary = None
         self.repaint()
 
     def resizeEvent(self, event):
@@ -108,12 +121,15 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
         super(InfluenceCurveWidget, self).show()
         self.noresize = False
 
+
 def find_point_to_move(pointdatas, position, precision=8):
-    for pointdata in pointdatas:
+    pointdatas = sorted(pointdatas, key=lambda x: x['center'][0])
+    for index, pointdata in enumerate(pointdatas):
         for key in ("center", "in", "out"):
             if distance(QtCore.QPoint(*pointdata[key]), position) < precision:
-                return pointdata, key
-    return None, None
+                return pointdata, key, index
+    return None, None, None
+
 
 def get_opposite_tangent(center, tangent):
     c = QtCore.QPointF(tangent.x(), center.y())
@@ -224,19 +240,19 @@ def draw_grid(painter, rect):
         left = i * 20
         painter.drawLine(
             QtCore.QPoint(left, 2),
-            QtCore.QPoint(left, rect.height() -2))
+            QtCore.QPoint(left, rect.height() - 2))
 
     pen = QtGui.QPen(QtGui.QColor('#434343'))
     pen.setWidth(2)
     painter.setPen(pen)
     painter.drawLine(
         QtCore.QPoint(100, 3),
-        QtCore.QPoint(100, rect.height() -3))
+        QtCore.QPoint(100, rect.height() - 3))
 
     pen = QtGui.QPen(QtGui.QColor('#323232'))
     painter.setPen(pen)
     painter.drawLine(
-        QtCore.QPoint(3, rect.height() -15),
+        QtCore.QPoint(3, rect.height() - 15),
         QtCore.QPoint(rect.width() - 3, rect.height() - 15))
     painter.drawLine(
         QtCore.QPoint(3, 15),
