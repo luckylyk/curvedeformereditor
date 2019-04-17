@@ -16,7 +16,32 @@ DEFAULT_POINTS = [
         'out': (DEFAULT_SIZE[0] + (DEFAULT_SIZE[0] / 3), DEFAULT_SIZE[1])
     }
 ]
-print(DEFAULT_POINTS[0]['in'], DEFAULT_POINTS[0]['out'])
+
+
+class ControlPoint(object):
+    def __init__(self, center, tangentin, tangentout):
+        self.center = QtCore.QPointF(center)
+        self.tangentin = QtCore.QPointF(tangentin)
+        self.tangentout = QtCore.QPointF(tangentout)
+
+    def move(self, point):
+        delta = self.center - point
+        self.center += delta
+        self.tangentin += delta
+        self.tangentout += delta
+
+    def move_tangent(self, point):
+        if point.x() < self.center.x():
+            parent = self.tangentin
+            child = self.tangentout
+        else:
+            parent = self.tangentout
+            child = self.tangentin
+        parent.setX(point.x())
+        parent.setY(point.y())
+        mirror = get_opposite_tangent(self.center, parent)
+        child.setX(mirror.x())
+        child.setY(mirror.y())
 
 
 class InfluenceCurveWidget(QtWidgets.QWidget):
@@ -189,6 +214,25 @@ def create_rect_from_center(center, segment_lenght=8):
     rectangle = QtCore.QRectF(0, 0, segment_lenght, segment_lenght)
     rectangle.moveCenter(center)
     return rectangle
+
+
+def draw_controlpoint(painter, controlpoint):
+    painter.setBrush(QtGui.QColor('red'))
+    center_rect = create_rect_from_center(controlpoint.center)
+    painter.drawRect(center_rect)
+
+    painter.setBrush(QtGui.QColor(0, 0, 0, 0))
+    painter.setPen(QtGui.QColor('red'))
+
+    tin_rect = create_rect_from_center(controlpoint.tangentin)
+    painter.drawRect(tin_rect)
+    line = QtCore.QLine(controlpoint.tangentin.toPoint(), controlpoint.center.toPoint())
+    painter.drawLine(line)
+
+    tout_rect = create_rect_from_center(controlpoint.tangentout)
+    painter.drawRect(tout_rect)
+    line = QtCore.QLine(controlpoint.center.toPoint(), controlpoint.tangentout.toPoint())
+    painter.drawLine(line)
 
 
 def draw_point(painter, pointdatas):
