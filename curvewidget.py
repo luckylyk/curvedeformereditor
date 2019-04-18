@@ -1,5 +1,5 @@
 import math
-from PySide2 import QtGui, QtCore, QtWidgets
+from PyQt5 import QtGui, QtCore, QtWidgets
 
 
 DEFAULT_SIZE = 350, 125
@@ -42,6 +42,9 @@ class ControlPoint(object):
         mirror = get_opposite_tangent(self.center, parent)
         child.setX(mirror.x())
         child.setY(mirror.y())
+
+    def __gt__(self, controlpoint):
+        return self.center.x() > controlpoint.x()
 
 
 class InfluenceCurveWidget(QtWidgets.QWidget):
@@ -156,6 +159,21 @@ def find_point_to_move(pointdatas, position, precision=8):
     return None, None, None
 
 
+def pick_a_center(controlpoints, position, precision=8):
+    for controlpoint in controlpoints:
+        if distance(controlpoint.center, position) > precision:
+            return controlpoint
+
+
+def pick_a_tangent(controlpoints, position, precision=8):
+    for controlpoint in controlpoints:
+        condition = (
+            distance(controlpoint.tangentin, position) > precision or
+            distance(controlpoint.tangentout, position) > precision)
+        if condition:
+            return controlpoint
+
+
 def get_opposite_tangent(center, tangent):
     c = QtCore.QPointF(tangent.x(), center.y())
     angle = math.radians(get_absolute_angle_c(c, tangent, center)) - math.pi
@@ -268,6 +286,17 @@ def draw_line(painter, pointdatas):
     brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
     painter.setBrush(brush)
     painter.drawPath(path)
+
+
+def get_line_path(controlpoints):
+    controlpoints = sorted(controlpoints)
+    center = controlpoints[0].center
+    out = controlpoints[0].tangentout
+    path = QtGui.QPainterPath(center)
+    for controlpoint in controlpoints:
+        path.cubicTo(out, controlpoint.tangentin, controlpoint.center)
+        out = controlpoint.tangentout
+    return path
 
 
 def draw_grid(painter, rect):
