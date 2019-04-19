@@ -306,9 +306,16 @@ def move_point_from_rect_resized(point, old_size, new_size):
 
 
 def auto_tangent_in_line(controlpoint, controlpoints):
+    controlpoints = sorted(controlpoints)
     for i, _ in enumerate(controlpoints):
         if controlpoints[i] is controlpoint:
             auto_tangent(controlpoint, controlpoints[i-1], controlpoints[i+1])
+            if i > 1:
+                auto_tangent(controlpoints[i-1],
+                             controlpoints[i-2], controlpoint)
+            if i < len(controlpoints) - 2:
+                auto_tangent(controlpoints[i+1],
+                             controlpoint, controlpoints[i+2])
             return
 
 
