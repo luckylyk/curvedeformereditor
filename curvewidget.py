@@ -1,5 +1,10 @@
+import sys
+
+sys.path.append('/nwave/software/PySide2/5.12.0-cp27/linux64/')
+sys.path.append('/nwave/software/shiboken2/5.12.0-cp27/linux64/')
+
 import math
-from PyQt5 import QtGui, QtCore, QtWidgets
+from PySide2 import QtGui, QtCore, QtWidgets
 
 
 DEFAULT_SIZE = 350, 125
@@ -18,6 +23,17 @@ DEFAULT_POINTS = [
 ]
 
 
+def get_default_controlpoints():
+    controlpoints = []
+    for point in DEFAULT_POINTS:
+        controlpoints.append(
+            ControlPoint(
+                center=QtCore.QPointF(*point['center']),
+                tangentin=QtCore.QPointF(*point['in']),
+                tangentout=QtCore.QPointF(*point['out'])))
+    return controlpoints
+
+
 class ControlPoint(object):
     def __init__(self, center, tangentin, tangentout):
         self.center = QtCore.QPointF(center)
@@ -26,9 +42,9 @@ class ControlPoint(object):
 
     def move(self, point):
         delta = self.center - point
-        self.center += delta
-        self.tangentin += delta
-        self.tangentout += delta
+        self.center -= delta
+        self.tangentin -= delta
+        self.tangentout -= delta
 
     def move_tangent(self, point):
         if point.x() < self.center.x():
@@ -43,97 +59,64 @@ class ControlPoint(object):
         child.setX(mirror.x())
         child.setY(mirror.y())
 
-    def __gt__(self, controlpoint):
-        return self.center.x() > controlpoint.x()
+    def resize(self, old_size, new_size):
+        move_point_from_rect_resized(self.center, old_size, new_size)
+        move_point_from_rect_resized(self.tangentin, old_size, new_size)
+        move_point_from_rect_resized(self.tangentout, old_size, new_size)
+
+    def __lt__(self, controlpoint):
+        return self.center.x() < controlpoint.center.x()
 
 
 class InfluenceCurveWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(InfluenceCurveWidget, self).__init__(parent)
         self.setMinimumSize(*MINIMUM_SIZE)
+        self.noresize = True
         self.resize(*DEFAULT_SIZE)
-
         self.setMouseTracking(True)
         self.is_clicked = False
-        self.point_to_move = None
-        self.point_to_move_is_boundary = None
-        self.key_to_move = None
-        self.noresize = True
-        self.points = [d.copy() for d in DEFAULT_POINTS]
+        self.controlpoints = get_default_controlpoints()
 
-    def mouseMoveEvent(self, _):
-
+    def mouseMoveEvent(self, event):
         if self.is_clicked is False:
             return
-        if not self.point_to_move:
-            return
-        center = self.point_to_move['center']
-        cursor = self.mapFromGlobal(QtGui.QCursor.pos())
-        x = center[0]
-        y = cursor.y()
-        inx = self.point_to_move['in'][0]
-        if not self.point_to_move_is_boundary:
-            x = cursor.x()
-            inx += cursor.x() - center[0]
-        else:
-            if y < 0:
-                y = 0
-            if y > self.rect().bottom():
-                y = self.rect().bottom()
-        iny = self.point_to_move['in'][1] + y - center[1]
-        if self.key_to_move == 'center':
-            self.point_to_move['center'] = x, y
-            self.point_to_move['in'] = inx, iny
-            self.point_to_move['out'] = get_opposite_tangent(
-                QtCore.QPointF(*self.point_to_move['center']),
-                QtCore.QPointF(*self.point_to_move['in']))
+        if self.center_to_move:
+            self.center_to_move.move(event.pos())
             self.repaint()
             return
-        relative = 'out' if self.key_to_move == 'in' else 'in'
-        self.point_to_move[self.key_to_move] = cursor.x(), y
-        self.point_to_move[relative] = get_opposite_tangent(
-            QtCore.QPointF(*self.point_to_move['center']),
-            QtCore.QPointF(*self.point_to_move[self.key_to_move]))
-        self.repaint()
+        if self.tangent_to_move:
+            self.tangent_to_move.move_tangent(event.pos())
+            self.repaint()
 
     def mousePressEvent(self, event):
         self.is_clicked = True
-        point, key, index = find_point_to_move(self.points, event.pos())
-        if point is None:
-            position = event.pos()
-            point = {
-                'center': (position.x(), position.y()),
-                'in': (position.x() - 30, position.y()),
-                'out': (position.x() + 30, position.y())}
-            self.points.append(point)
-            key = 'center'
-        self.point_to_move = point
-        self.key_to_move = key
-        is_boundary = index == 0 or index == len(self.points) - 1
-        self.point_to_move_is_boundary = is_boundary
+        self.center_to_move = pick_a_center(self.controlpoints, event.pos())
+        self.tangent_to_move = pick_a_tangent(self.controlpoints, event.pos())
+        print self.center_to_move, self.tangent_to_move
+        if not self.center_to_move and not self.tangent_to_move:
+            controlpoint = create_controlpoint_in_line(
+                event.pos(), self.controlpoints)
+            self.controlpoints.append(controlpoint)
+            self.controlpoints = sorted(self.controlpoints)
+            self.center_to_move = controlpoint
+        self.repaint()
 
     def mouseReleaseEvent(self, event):
+        if self.center_to_move:
+            if not self.rect().contains(self.center_to_move.center.toPoint()):
+                self.controlpoints.remove(self.center_to_move)
         self.is_clicked = False
-        if self.point_to_move is None:
-            return
-        if not self.rect().contains(event.pos()):
-            if not self.point_to_move_is_boundary:
-                self.points.remove(self.point_to_move)
-                'removed'
-        self.point_to_move = None
-        self.point_to_move_is_boundary = None
+        self.center_to_move = None
+        self.tangent_to_move = None
         self.repaint()
 
     def resizeEvent(self, event):
         if self.noresize is True:
             return
-        for pointdata in self.points:
-            pointdata['center'] = move_point_from_rect_resized(
-                pointdata['center'], event.oldSize(), event.size())
-            pointdata['in'] = move_point_from_rect_resized(
-                pointdata['in'], event.oldSize(), event.size())
-            pointdata['out'] = move_point_from_rect_resized(
-                pointdata['out'], event.oldSize(), event.size())
+        for controlpoint in self.controlpoints:
+            controlpoint.resize(event.oldSize(), event.size())
+        self.repaint()
 
     def paintEvent(self, _):
         painter = QtGui.QPainter(self)
@@ -141,35 +124,49 @@ class InfluenceCurveWidget(QtWidgets.QWidget):
         rect = self.rect()
 
         draw_grid(painter, rect)
-        for point in self.points:
-            draw_point(painter, point)
-        draw_line(painter, self.points)
+        for controlpoint in self.controlpoints:
+            draw_controlpoint(painter, controlpoint)
+        path = get_line_path(self.controlpoints)
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        painter.setBrush(brush)
+        painter.drawPath(path)
 
     def show(self):
         super(InfluenceCurveWidget, self).show()
         self.noresize = False
 
 
-def find_point_to_move(pointdatas, position, precision=8):
-    pointdatas = sorted(pointdatas, key=lambda x: x['center'][0])
-    for index, pointdata in enumerate(pointdatas):
-        for key in ("center", "in", "out"):
-            if distance(QtCore.QPoint(*pointdata[key]), position) < precision:
-                return pointdata, key, index
-    return None, None, None
+def create_controlpoint_in_line(position, controlpoints):
+    controlpoints = sorted(controlpoints)
+    previous = controlpoints[0].center
+    for controlpoint in controlpoints[1:]:
+        next_ = controlpoint.center
+        if controlpoint.center.x() > position.x():
+            break
+        previous = controlpoint.center
+    ray = (distance(previous, position) + distance(position, next_)) / 5
+    angle1 = QtCore.QPointF.dotProduct(previous, position)
+    angle2 = QtCore.QPointF.dotProduct(position, next_)
+    angle = (angle1 + angle2 + math.pi) / 2
+    tangentin = point_on_circle(angle, ray, position)
+    tangentout = get_opposite_tangent(position, tangentin)
+    tangentin, tangentout = sorted(
+        [tangentin, tangentout], key=lambda x: x.x())
+    controlpoint = ControlPoint(position, tangentin, tangentout)
+    return controlpoint
 
 
-def pick_a_center(controlpoints, position, precision=8):
+def pick_a_center(controlpoints, position, tolerance=8):
     for controlpoint in controlpoints:
-        if distance(controlpoint.center, position) > precision:
+        if distance(controlpoint.center, position) < tolerance:
             return controlpoint
 
 
-def pick_a_tangent(controlpoints, position, precision=8):
+def pick_a_tangent(controlpoints, position, tolerance=8):
     for controlpoint in controlpoints:
         condition = (
-            distance(controlpoint.tangentin, position) > precision or
-            distance(controlpoint.tangentout, position) > precision)
+            distance(controlpoint.tangentin, position) < tolerance or
+            distance(controlpoint.tangentout, position) < tolerance)
         if condition:
             return controlpoint
 
@@ -178,7 +175,7 @@ def get_opposite_tangent(center, tangent):
     c = QtCore.QPointF(tangent.x(), center.y())
     angle = math.radians(get_absolute_angle_c(c, tangent, center)) - math.pi
     ray = distance(center, tangent)
-    return get_point_on_circle(angle, ray, (center.x(), center.y()))
+    return point_on_circle(angle, ray, center)
 
 
 def get_quarter(a, b, c):
@@ -194,10 +191,10 @@ def get_quarter(a, b, c):
     return quarter
 
 
-def get_point_on_circle(angle, ray, center):
+def point_on_circle(angle, ray, center):
     x = ray * math.cos(float(angle))
     y = ray * math.sin(float(angle))
-    return center[0] + x, center[1] + y
+    return QtCore.QPointF(center.x() + x, center.y() + y)
 
 
 def get_angle_c(a, b, c):
@@ -244,48 +241,15 @@ def draw_controlpoint(painter, controlpoint):
 
     tin_rect = create_rect_from_center(controlpoint.tangentin)
     painter.drawRect(tin_rect)
-    line = QtCore.QLine(controlpoint.tangentin.toPoint(), controlpoint.center.toPoint())
+    line = QtCore.QLine(controlpoint.tangentin.toPoint(),
+                        controlpoint.center.toPoint())
     painter.drawLine(line)
 
     tout_rect = create_rect_from_center(controlpoint.tangentout)
     painter.drawRect(tout_rect)
-    line = QtCore.QLine(controlpoint.center.toPoint(), controlpoint.tangentout.toPoint())
+    line = QtCore.QLine(controlpoint.center.toPoint(),
+                        controlpoint.tangentout.toPoint())
     painter.drawLine(line)
-
-
-def draw_point(painter, pointdatas):
-    painter.setBrush(QtGui.QColor('red'))
-    center = QtCore.QPointF(*pointdatas['center'])
-    center_rect = create_rect_from_center(center)
-    painter.drawRect(center_rect)
-
-    painter.setBrush(QtGui.QColor(0, 0, 0, 0))
-    painter.setPen(QtGui.QColor('red'))
-    if pointdatas['in']:
-        tin = QtCore.QPointF(*pointdatas['in'])
-        tin_rect = create_rect_from_center(tin)
-        painter.drawRect(tin_rect)
-        painter.drawLine(QtCore.QLine(tin.toPoint(), center.toPoint()))
-
-    if pointdatas['out']:
-        tout = QtCore.QPointF(*pointdatas['out'])
-        tout_rect = create_rect_from_center(tout)
-        painter.drawRect(tout_rect)
-        painter.drawLine(QtCore.QLine(center.toPoint(), tout.toPoint()))
-
-
-def draw_line(painter, pointdatas):
-    pointdatas = sorted(pointdatas, key=lambda x: x['center'][0])
-    path = QtGui.QPainterPath(QtCore.QPointF(*pointdatas[0]['center']))
-    out = QtCore.QPointF(*pointdatas[0]['out'])
-    for pointdata in pointdatas[1:]:
-        in_ = QtCore.QPointF(*pointdata['in'])
-        center = QtCore.QPointF(*pointdata['center'])
-        path.cubicTo(out, in_, center)
-        out = QtCore.QPointF(*pointdata['out'])
-    brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-    painter.setBrush(brush)
-    painter.drawPath(path)
 
 
 def get_line_path(controlpoints):
@@ -333,9 +297,10 @@ def draw_grid(painter, rect):
 
 
 def move_point_from_rect_resized(point, old_size, new_size):
-    x = (point[0] / old_size.width()) * new_size.width()
-    y = (point[1] / old_size.height()) * new_size.height()
-    return x, y
+    x = (point.x() / old_size.width()) * new_size.width()
+    y = (point.y() / old_size.height()) * new_size.height()
+    point.setX(x)
+    point.setY(y)
 
 
 def relative(value, in_min, in_max, out_min, out_max):
