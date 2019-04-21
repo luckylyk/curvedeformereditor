@@ -9,7 +9,6 @@ def set_value(value, index, array, break_point_indices=None, interpolate=True):
     array[index] = value
     if len(array) < 3 or interpolate is False:
         return array
-
     break_point_indices = break_point_indices or [0, len(array) - 1]
     previous_index, next_index = find_previous_and_next_indices(
         index, break_point_indices)
@@ -90,6 +89,17 @@ def get_break_indices(array):
     return break_indexes
 
 
+def split_value(value, sample):
+    samples = [0]
+    sample -= 1
+    inc = value / sample
+    value = inc
+    for _ in range(sample):
+        samples.append(value)
+        value += inc
+    return samples
+
+
 if __name__ == '__main__':
     def test_get_break_indices():
         values = [1, 2, 3, 4, 5, 7, 9, 11]
@@ -119,11 +129,11 @@ if __name__ == '__main__':
     def test_set_value():
         values = [1, 1, 1, 1, 1, 1, 1, 1, 1]
         values_2 = set_value(5, 4, values, break_point_indices=None)
-        print (values_2)
-        assert values_2 == [1, 2, 3, 4 ,5 ,4 ,3, 2, 1]
+        print(values_2)
+        assert values_2 == [1, 2, 3, 4, 5, 4, 3, 2, 1]
         values = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         values_2 = set_value(3, 3, values, break_point_indices=[1, 5])
-        print (values_2)
+        print(values_2)
         assert values_2 == [1, 1, 2, 3, 2, 1, 1, 1, 1, 1, 1]
 
     test_get_break_indices()
