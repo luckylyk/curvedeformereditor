@@ -134,10 +134,10 @@ def auto_tangent(controlpoint, before, after):
 
 
 def vertical_path(rect, x):
-    point1 = QtCore.QPointF(x, rect.top())
-    point2 = QtCore.QPointF(x, rect.bottom())
-    point3 = QtCore.QPointF(x + 1e-5, rect.bottom())
-    point4 = QtCore.QPointF(x + 1e-5, rect.top())
+    point1 = QtCore.QPointF(x, rect.top() - 1e10)
+    point2 = QtCore.QPointF(x, rect.bottom() + 1e10)
+    point3 = QtCore.QPointF(x + 1e-5, rect.bottom() + 1e10)
+    point4 = QtCore.QPointF(x + 1e-5, rect.top() - 1e10)
     path = QtGui.QPainterPath(point1)
     path.lineTo(point2)
     path.lineTo(point3)
