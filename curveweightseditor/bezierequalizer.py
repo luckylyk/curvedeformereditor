@@ -255,12 +255,8 @@ def auto_tangent(controlpoint, before, after):
     width = after.center.x() - before.center.x()
     if width == 0:
         width += 1e-5
-    width_before = controlpoint.center.x() - before.center.x()
-    factor = width_before / width
-    target = (before.center * (1 - factor)) + (before.tangentout * factor)
-    angle1 = compute_angle(target, controlpoint.center)
-    target = (after.center * (1 - factor)) + (after.tangentout * factor)
-    angle2 = compute_angle(controlpoint.center, target)
+    angle1 = compute_angle(before.tangentout, controlpoint.center)
+    angle2 = compute_angle(controlpoint.center, after.tangentin)
 
     # clamp the angle to avoid tangent swapswap
     if abs(angle1 - angle2) > math.pi:
@@ -269,10 +265,13 @@ def auto_tangent(controlpoint, before, after):
         else:
             angle2 -= 2 * math.pi
 
+    width_before = controlpoint.center.x() - before.center.x()
+    factor = width_before / width
     angle = (angle1 * (1 - factor)) + (angle2 * factor)
     tangent1 = point_on_circle(angle, ray_out, controlpoint.center)
     tangent2 = point_on_circle(angle + math.pi, ray_in, controlpoint.center)
     controlpoint.move_tangent(tangent1, tangent2)
+
 
 
 def vertical_path(rect, x):
