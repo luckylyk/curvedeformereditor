@@ -1,7 +1,7 @@
 
 
 import math
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PySide2 import QtCore, QtGui, QtWidgets
 
 
 COLORS = {
@@ -17,13 +17,15 @@ COLORS = {
 }
 
 
-class CurveGraphWidget(QtWidgets.QWidget):
-    valuesEditBegin = QtCore.pyqtSignal()
-    valuesEditEnd = QtCore.pyqtSignal()
+class BezierEqualizer(QtWidgets.QWidget):
+    bezierCurveEdited = QtCore.Signal()
+    bezierCurveEditBegin = QtCore.Signal()
+    bezierCurveEditEnd = QtCore.Signal()
 
     def __init__(self, parent=None):
-        super(CurveGraphWidget, self).__init__(parent)
+        super(BezierEqualizer, self).__init__(parent)
         self.setMouseTracking(True)
+        self.setMinimumSize(QtCore.QSize(250, 100))
 
         self.renderhint = QtGui.QPainter.Antialiasing
         self.colors = COLORS.copy()
@@ -46,6 +48,7 @@ class CurveGraphWidget(QtWidgets.QWidget):
             self.picked_center.move(event.pos(), rect)
             auto_tangent_beziercurve(controlpoints)
             self.repaint()
+            self.bezierCurveEdited.emit()
             return
 
         if self.editabletangents is False or self.picked_tangent is None:
@@ -55,6 +58,7 @@ class CurveGraphWidget(QtWidgets.QWidget):
         self.picked_tangent.move_tangent(event.pos())
         auto_tangent_beziercurve(controlpoints, self.picked_tangent)
         self.repaint()
+        self.bezierCurveEdited.emit()
 
     def mousePressEvent(self, event):
         self.isclicked = True
@@ -70,6 +74,7 @@ class CurveGraphWidget(QtWidgets.QWidget):
             auto_tangent_beziercurve(self.controlpoints)
             self.picked_center = controlpoint
         self.repaint()
+        self.bezierCurveEditBegin.emit()
 
     def mouseReleaseEvent(self, _):
         if self.picked_center:
@@ -80,6 +85,7 @@ class CurveGraphWidget(QtWidgets.QWidget):
         self.picked_center = None
         self.picked_tangent = None
         self.repaint()
+        self.bezierCurveEditEnd.emit()
 
     def resizeEvent(self, event):
         if self.isVisible() is False:
@@ -98,6 +104,8 @@ class CurveGraphWidget(QtWidgets.QWidget):
         if self.drawbody is True:
             path = create_beziercurve_path(self.controlpoints, self.rect())
             draw_bezierbody(painter, path, self.colors)
+        if not self.controlpoints:
+            return
         path = create_beziercurve_path(self.controlpoints)
         draw_bezierpath(painter, path, self.colors)
         for controlpoint in self.controlpoints:
@@ -110,8 +118,7 @@ class CurveGraphWidget(QtWidgets.QWidget):
     def values(self, sample):
         path = create_beziercurve_path(self.controlpoints)
         rect = self.rect()
-        points = compute_bezier_curve_values(path, rect, sample)
-        return [1 - (point.y() / rect.height()) for point in points]
+        return compute_bezier_curve_values(path, rect, sample)
 
     def setValues(self, values):
         if len(values) < 2:
@@ -120,6 +127,7 @@ class CurveGraphWidget(QtWidgets.QWidget):
         self.controlpoints = create_beziercurve(values, rect)
         self.controlpoints[0].isboundary = True
         self.controlpoints[-1].isboundary = True
+        self.repaint()
 
     def setColor(self, key, colorname):
         if key not in self.colors:
@@ -271,7 +279,6 @@ def auto_tangent(controlpoint, before, after):
     tangent1 = point_on_circle(angle, ray_out, controlpoint.center)
     tangent2 = point_on_circle(angle + math.pi, ray_in, controlpoint.center)
     controlpoint.move_tangent(tangent1, tangent2)
-
 
 
 def vertical_path(rect, x):
@@ -526,14 +533,3 @@ def draw_bezierbody(painter, path, colors=None):
     painter.setBrush(brush)
     painter.setPen(QtGui.QColor(0, 0, 0, 0))
     painter.drawPath(path)
-
-
-if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
-    wid = CurveGraphWidget()
-    wid.setValues([.8, .5, .6, 1, 0])
-    wid.show()
-    wid.setEditableTangents(False)
-    wid.setBodyVisible(True)
-    wid.setGridVisible(True)
-    app.exec_()
