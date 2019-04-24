@@ -1,11 +1,15 @@
 
 
+import maya.OpenMaya as om
+from PySide2 import QtWidgets, QtCore, QtGui
+from maya import cmds
 import math
-from PySide2 import QtCore, QtGui, QtWidgets
+# from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 COLORS = {
     'controlpoint.center': 'yellow',
+    'controlpoint.centerselected': 'white',
     'controlpoint.tangentlocked': 'orange',
     'controlpoint.autotangent': 'red',
     'background.color': '#222222',
@@ -33,6 +37,9 @@ class BezierEqualizer(QtWidgets.QWidget):
         self.gridvisible = True
         self.editabletangents = True
         self.drawbody = False
+        self.grid_horizontal_divisions = 5
+        self.grid_vertical_divisions = 25
+        self.grid_main_disivions_mult = 4
 
         self.picked_center = None
         self.picked_tangent = None
@@ -73,6 +80,10 @@ class BezierEqualizer(QtWidgets.QWidget):
             self.controlpoints = sorted(controlpoints)
             auto_tangent_beziercurve(self.controlpoints)
             self.picked_center = controlpoint
+
+        if self.picked_center:
+            select_controlpoint(self.picked_center, self.controlpoints)
+
         self.repaint()
         self.bezierCurveEditBegin.emit()
 
@@ -100,7 +111,13 @@ class BezierEqualizer(QtWidgets.QWidget):
         rect = self.rect()
         draw_background(painter, rect, self.colors)
         if self.gridvisible is True:
-            draw_grid(painter, rect, colors=self.colors)
+            draw_grid(
+                painter, rect,
+                vertical_small_graduation=self.grid_vertical_divisions,
+                horizontal_small_graduation=self.grid_horizontal_divisions,
+                vertical_big_graduation=self.grid_main_disivions_mult,
+                horizontal_big_graduation=self.grid_main_disivions_mult,
+                colors=None)
         if self.drawbody is True:
             path = create_beziercurve_path(self.controlpoints, self.rect())
             draw_bezierbody(painter, path, self.colors)
@@ -119,6 +136,12 @@ class BezierEqualizer(QtWidgets.QWidget):
         path = create_beziercurve_path(self.controlpoints)
         rect = self.rect()
         return compute_bezier_curve_values(path, rect, sample)
+
+    def selectedControlPoint(self):
+        for controlpoint in self.controlpoints:
+            if controlpoint.selected is True:
+                return controlpoint
+        return None
 
     def setValues(self, values):
         if len(values) < 2:
@@ -152,6 +175,20 @@ class BezierEqualizer(QtWidgets.QWidget):
     def setBodyVisible(self, state):
         self.drawbody = state
 
+    def setGridHorizontalDivision(self, division):
+        self.grid_horizontal_divisions = division
+
+    def setGridVerticalDivision(self, division):
+        self.grid_vertical_divisions = division
+
+    def setGridMainDivisionsMult(self, division):
+        self.grid_main_disivions_mult = division
+
+
+###############################################################################
+############################## CONTROLPOINT ###################################
+###############################################################################
+
 
 class ControlPoint():
     def __init__(self, center, tangentin=None, tangentout=None):
@@ -160,6 +197,8 @@ class ControlPoint():
         self.tangentout = QtCore.QPointF(tangentout or center)
         self.isboundary = False
         self.autotangent = True
+        self.selected = False
+        self.linear = False
 
     def move(self, point, rect=None):
         if self.isboundary is True:
@@ -257,9 +296,6 @@ def auto_tangent_boundary_controlpoint(controlpoint, target):
 
 def auto_tangent(controlpoint, before, after):
     """ TODO: docstring """
-    ray_in = distance(before.center, controlpoint.center) * 0.3
-    ray_out = distance(controlpoint.center, after.center) * 0.3
-
     width = after.center.x() - before.center.x()
     if width == 0:
         width += 1e-5
@@ -276,26 +312,17 @@ def auto_tangent(controlpoint, before, after):
     width_before = controlpoint.center.x() - before.center.x()
     factor = width_before / width
     angle = (angle1 * (1 - factor)) + (angle2 * factor)
+
+    ray_in = distance(before.center, controlpoint.center) * 0.3
+    ray_out = distance(controlpoint.center, after.center) * 0.3
+    # ray_limit = compute_ray_limit(
+    #     angle, controlpoint.center, controlpoint.tangentout)
+    # if ray_out > ray_limit and ray_limit > 0:
+    #     ray_out = ray_limit
+
     tangent1 = point_on_circle(angle, ray_out, controlpoint.center)
     tangent2 = point_on_circle(angle + math.pi, ray_in, controlpoint.center)
     controlpoint.move_tangent(tangent1, tangent2)
-
-
-def vertical_path(rect, x):
-    """
-    This function create a super tiny vertical rectangle on the x coordinate.
-    This is use to find a Y coordinate with X coordinate given on a bezier
-    curve.
-    """
-    point1 = QtCore.QPointF(x, rect.top() - 1e10)
-    point2 = QtCore.QPointF(x, rect.bottom() + 1e10)
-    point3 = QtCore.QPointF(x + 1e-5, rect.bottom() + 1e10)
-    point4 = QtCore.QPointF(x + 1e-5, rect.top() - 1e10)
-    path = QtGui.QPainterPath(point1)
-    path.lineTo(point2)
-    path.lineTo(point3)
-    path.lineTo(point4)
-    return path
 
 
 def compute_bezier_curve_values(path, rect, sample):
@@ -317,6 +344,21 @@ def compute_bezier_curve_values(path, rect, sample):
     intersections = [path.intersected(line) for line in lines]
     points = [intersection.pointAtPercent(0) for intersection in intersections]
     return [1 - (point.y() / rect.height()) for point in points]
+
+
+###############################################################################
+############################### TRIGONOMETRY ##################################
+###############################################################################
+
+
+def compute_ray_limit(angle, point1, point2):
+    limit_x = abs(point1.x() - point2.x())
+    limit_y = abs(point1.y() - point2.y())
+    angle = ((angle / (math.pi / 2) - 0.5) * 2)
+    limit_x *= 1 - abs(angle) if angle >= 0 else 1
+    limit_y *= 1 - abs(angle) if angle <= 0 else 1
+    limit_xy = (abs(angle) / 4) + .75
+    return (limit_x + limit_y) * limit_xy
 
 
 def point_on_circle(angle, ray, center):
@@ -371,6 +413,21 @@ def distance(a, b):
     return math.sqrt(abs(x + y))
 
 
+def select_controlpoint(selected_controlpoint, controlpoints):
+    for controlpoint in controlpoints:
+        controlpoint.selected = False
+    selected_controlpoint.selected = True
+
+
+def create_beziercurve(values, rect):
+    """ TODO: docstring """
+    x_pos = split_value(rect.width(), len(values))
+    y_pos = [rect.height() * (1 - value) for value in values]
+    cp = [ControlPoint(QtCore.QPointF(x, y)) for x, y in zip(x_pos, y_pos)]
+    auto_tangent_beziercurve(cp)
+    return cp
+
+
 def move_point_from_resized_rect(point, old_size, new_size):
     """
     This function move a point with a reference size and a new size.
@@ -379,6 +436,28 @@ def move_point_from_resized_rect(point, old_size, new_size):
     y = (point.y() / old_size.height()) * new_size.height()
     point.setX(x)
     point.setY(y)
+
+
+###############################################################################
+########################### RECT AND PAINTERPATH ##############################
+###############################################################################
+
+
+def vertical_path(rect, x):
+    """
+    This function create a super tiny vertical rectangle on the x coordinate.
+    This is use to find a Y coordinate with X coordinate given on a bezier
+    curve.
+    """
+    point1 = QtCore.QPointF(x, rect.top() - 1e10)
+    point2 = QtCore.QPointF(x, rect.bottom() + 1e10)
+    point3 = QtCore.QPointF(x + 1e-5, rect.bottom() + 1e10)
+    point4 = QtCore.QPointF(x + 1e-5, rect.top() - 1e10)
+    path = QtGui.QPainterPath(point1)
+    path.lineTo(point2)
+    path.lineTo(point3)
+    path.lineTo(point4)
+    return path
 
 
 def create_rect_from_point(center, segment_lenght=8):
@@ -404,6 +483,10 @@ def create_beziercurve_path(controlpoints, rect=None):
     out = controlpoints[0].tangentout
     path = QtGui.QPainterPath(center)
     for controlpoint in controlpoints:
+        if controlpoint.linear is True:
+            path.cubicTo(*[controlpoint.center] * 3)
+            out = controlpoint.center
+            continue
         path.cubicTo(out, controlpoint.tangentin, controlpoint.center)
         out = controlpoint.tangentout
     if rect is None:
@@ -412,6 +495,11 @@ def create_beziercurve_path(controlpoints, rect=None):
     path.lineTo(rect.bottomLeft())
     path.lineTo(controlpoints[0].center)
     return path
+
+
+###############################################################################
+################################ ARRAY UTILS ##################################
+###############################################################################
 
 
 def split_value(value, sample):
@@ -425,18 +513,9 @@ def split_value(value, sample):
     return [increment * i for i in range(sample)]
 
 
-def create_beziercurve(values, rect):
-    """ TODO: docstring """
-    x_pos = split_value(rect.width(), len(values))
-    y_pos = [rect.height() * (1 - value) for value in values]
-    cp = [ControlPoint(QtCore.QPointF(x, y)) for x, y in zip(x_pos, y_pos)]
-    auto_tangent_beziercurve(cp)
-    return cp
-
-
-##################
-# DRAWS FUNCTION #
-##################
+###############################################################################
+############################## DRAWS FUNCTION #################################
+###############################################################################
 
 
 def draw_background(painter, rect, colors=None):
@@ -489,12 +568,14 @@ def draw_grid(
 
 def draw_controlpoint(painter, controlpoint, drawtangent=True, colors=None):
     colors = colors or COLORS.copy()
-    painter.setBrush(QtGui.QColor(colors['controlpoint.center']))
-    painter.setPen(QtGui.QColor(colors['controlpoint.center']))
+    selected = 'controlpoint.centerselected'
+    colorkey = selected if controlpoint.selected else 'controlpoint.center'
+    painter.setBrush(QtGui.QColor(colors[colorkey]))
+    painter.setPen(QtGui.QColor(colors[colorkey]))
     center_rect = create_rect_from_point(controlpoint.center)
     painter.drawRect(center_rect)
 
-    if drawtangent is False:
+    if drawtangent is False or controlpoint.linear is True:
         return
 
     painter.setBrush(QtGui.QColor(0, 0, 0, 0))
@@ -533,3 +614,11 @@ def draw_bezierbody(painter, path, colors=None):
     painter.setBrush(brush)
     painter.setPen(QtGui.QColor(0, 0, 0, 0))
     painter.drawPath(path)
+
+
+# if __name__ == "__main__":
+#     app = QtWidgets.QApplication([])
+#     wid = BezierEqualizer()
+#     wid.show()
+#     wid.setValues([0, .5, 1])
+#     app.exec_()

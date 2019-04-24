@@ -11,17 +11,37 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.callbacks = []
         self.curves = []
 
+        self.linear_selected = QtWidgets.QAction('linear', self)
+        self.linear_selected.triggered.connect(self._call_linear_selected)
+        self.smooth_selected = QtWidgets.QAction('smooth', self)
+        self.smooth_selected.triggered.connect(self._call_smooth_selected)
+        self.linear_all = QtWidgets.QAction('linear all', self)
+        self.linear_all.triggered.connect(self._call_linear_all)
+        self.smooth_all = QtWidgets.QAction('smooth all', self)
+        self.smooth_all.triggered.connect(self._call_smooth_all)
+        self.toolbar = QtWidgets.QToolBar()
+        self.toolbar.addAction(self.linear_selected)
+        self.toolbar.addAction(self.smooth_selected)
+        self.toolbar.addAction(self.linear_all)
+        self.toolbar.addAction(self.smooth_all)
+
         self.bezierequalizer = BezierEqualizer()
         self.bezierequalizer.setGridVisible(False)
         self.bezierequalizer.setEditableTangents(False)
         self.bezierequalizer.setBodyVisible(True)
         self.bezierequalizer.bezierCurveEdited.connect(self.weightschanged)
-        self.bezierequalizer.bezierCurveEditBegin.connect(self.startedit)
-        self.bezierequalizer.bezierCurveEditEnd.connect(self.stopedit)
+        self.bezierequalizer.bezierCurveEditBegin.connect(open_undochunk)
+        self.bezierequalizer.bezierCurveEditEnd.connect(close_undochunk)
 
         self.blendshapes = QtWidgets.QComboBox()
+
+        self.hlayout = QtWidgets.QHBoxLayout()
+        self.hlayout.setContentsMargins(0, 0, 0, 0)
+        self.hlayout.addWidget(self.toolbar)
+        self.hlayout.addWidget(self.blendshapes)
+
         self.layout = QtWidgets.QVBoxLayout(self)
-        self.layout.addWidget(self.blendshapes)
+        self.layout.addLayout(self.hlayout)
         self.layout.addWidget(self.bezierequalizer)
 
         self.register_callback()
@@ -30,6 +50,28 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         super(CurveDeformerWeightEditor, self).show()
         self.register_callback()
 
+    def _call_smooth_all(self):
+        for controlpoint in self.bezierequalizer.controlpoints:
+            controlpoint.linear = False
+        self.bezierequalizer.repaint()
+
+    def _call_smooth_selected(self):
+        for controlpoint in self.bezierequalizer.controlpoints:
+            if controlpoint.selected:
+                controlpoint.linear = False
+        self.bezierequalizer.repaint()
+
+    def _call_linear_selected(self):
+        for controlpoint in self.bezierequalizer.controlpoints:
+            controlpoint.linear = True
+        self.bezierequalizer.repaint()
+
+    def _call_linear_all(self):
+        for controlpoint in self.bezierequalizer.controlpoints:
+            if controlpoint.selected:
+                controlpoint.linear = True
+        self.bezierequalizer.repaint()
+
     def closeEvent(self, event):
         super(CurveDeformerWeightEditor, self).closeEvent(event)
         self.unregister_callback()
@@ -37,12 +79,6 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
     def hide(self):
         super(CurveDeformerWeightEditor, self).hide()
         self.unregister_callback()
-
-    def startedit(self):
-        cmds.undoInfo(openChunk=True)
-
-    def stopedit(self):
-        cmds.undoInfo(closeChunk=True)
 
     def weightschanged(self):
         blendshape = self.blendshapes.currentText()
@@ -74,6 +110,14 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.blendshapes.clear()
         self.blendshapes.addItems(blendshapes)
         self.bezierequalizer.setValues([1, 0])
+
+
+def open_undochunk():
+    cmds.undoInfo(openChunk=True)
+
+
+def close_undochunk():
+    cmds.undoInfo(closeChunk=True)
 
 
 def get_blendshape_weights_per_cv(curve, blendshape):
