@@ -1,5 +1,6 @@
 
 
+from PySide2 import QtWidgets, QtCore
 import maya.OpenMaya as om
 from PySide2 import QtWidgets, QtCore, QtGui
 from maya import cmds
@@ -43,7 +44,7 @@ class BezierEqualizer(QtWidgets.QWidget):
 
         self.picked_center = None
         self.picked_tangent = None
-        self.controlpoints = None
+        self.controlpoints = []
 
     def mouseMoveEvent(self, event):
         if self.isclicked is False:
@@ -68,11 +69,14 @@ class BezierEqualizer(QtWidgets.QWidget):
         self.bezierCurveEdited.emit()
 
     def mousePressEvent(self, event):
+        if not self.controlpoints:
+            return
+
         self.isclicked = True
         point = event.pos()
         controlpoints = self.controlpoints
-        self.picked_center = find_controlpoint_center(controlpoints, point)
-        self.picked_tangent = find_controlpoint_tangent(controlpoints, point)
+        self.picked_center = pick_controlpoint_center(controlpoints, point)
+        self.picked_tangent = pick_controlpoint_tangent(controlpoints, point)
 
         if not self.picked_center and not self.picked_tangent:
             controlpoint = insert_controlpoint_in_line(point, controlpoints)
@@ -118,11 +122,11 @@ class BezierEqualizer(QtWidgets.QWidget):
                 vertical_big_graduation=self.grid_main_disivions_mult,
                 horizontal_big_graduation=self.grid_main_disivions_mult,
                 colors=None)
+        if not self.controlpoints:
+            return
         if self.drawbody is True:
             path = create_beziercurve_path(self.controlpoints, self.rect())
             draw_bezierbody(painter, path, self.colors)
-        if not self.controlpoints:
-            return
         path = create_beziercurve_path(self.controlpoints)
         draw_bezierpath(painter, path, self.colors)
         for controlpoint in self.controlpoints:
@@ -242,14 +246,14 @@ def insert_controlpoint_in_line(point, controlpoints):
     return controlpoint
 
 
-def find_controlpoint_center(controlpoints, point, tolerance=8):
+def pick_controlpoint_center(controlpoints, point, tolerance=8):
     for controlpoint in controlpoints:
         if distance(controlpoint.center, point) < tolerance:
             return controlpoint
     return None
 
 
-def find_controlpoint_tangent(controlpoints, point, tolerance=8):
+def pick_controlpoint_tangent(controlpoints, point, tolerance=8):
     for controlpoint in controlpoints:
         condition = (
             distance(controlpoint.tangentin, point) < tolerance or
@@ -266,7 +270,10 @@ def compute_mirror_tangent(center, tangent, child=None):
 
 
 def auto_tangent_beziercurve(controlpoints, skip=None):
-    """ TODO: docstring """
+    """
+    This apply the good autotangent function on every controlpoint on a bezier
+    curve.
+    """
     controlpoints = sorted(controlpoints)
     for i, controlpoint in enumerate(controlpoints):
         if controlpoint is skip:
@@ -287,7 +294,10 @@ def auto_tangent_beziercurve(controlpoints, skip=None):
 
 
 def auto_tangent_boundary_controlpoint(controlpoint, target):
-    """ TODO: docstring """
+    """ 
+    This function compute the auto tangent for the first or the last point of
+    an bezier curve
+    """
     angle = compute_angle(controlpoint.center, target.center)
     ray = distance(controlpoint.center, target.center) * .3
     tangent = point_on_circle(angle, ray, controlpoint.center)
@@ -295,30 +305,33 @@ def auto_tangent_boundary_controlpoint(controlpoint, target):
 
 
 def auto_tangent(controlpoint, before, after):
-    """ TODO: docstring """
-    width = after.center.x() - before.center.x()
-    if width == 0:
-        width += 1e-5
+    """
+    This function create an auto smoothed tangent on a given controlpoint.
+    To compute the tangent angle, it use the controle point before and after
+    the given one on a bezier curve.
+    To define a smoothed angle, it calculate the average angle between the
+    before out tangent --> control point center and the 
+    control point center --> after in tangent.
+    """
     angle1 = compute_angle(before.tangentout, controlpoint.center)
     angle2 = compute_angle(controlpoint.center, after.tangentin)
-
-    # clamp the angle to avoid tangent swapswap
+    # clamp the angle to avoid tangent swap
     if abs(angle1 - angle2) > math.pi:
         if angle1 > angle2:
             angle1 -= 2 * math.pi
         else:
             angle2 -= 2 * math.pi
 
+    width = after.center.x() - before.center.x()
+    # offset the value to avoid ZeroDivisionError
+    if width == 0:
+        width += 1e-5
     width_before = controlpoint.center.x() - before.center.x()
     factor = width_before / width
     angle = (angle1 * (1 - factor)) + (angle2 * factor)
 
     ray_in = distance(before.center, controlpoint.center) * 0.3
     ray_out = distance(controlpoint.center, after.center) * 0.3
-    # ray_limit = compute_ray_limit(
-    #     angle, controlpoint.center, controlpoint.tangentout)
-    # if ray_out > ray_limit and ray_limit > 0:
-    #     ray_out = ray_limit
 
     tangent1 = point_on_circle(angle, ray_out, controlpoint.center)
     tangent2 = point_on_circle(angle + math.pi, ray_in, controlpoint.center)
@@ -622,3 +635,5 @@ def draw_bezierbody(painter, path, colors=None):
 #     wid.show()
 #     wid.setValues([0, .5, 1])
 #     app.exec_()
+
+# from curveweighteditor.bezierequalizer import BezierEqualizer

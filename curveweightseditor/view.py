@@ -120,15 +120,19 @@ def close_undochunk():
     cmds.undoInfo(closeChunk=True)
 
 
-def get_blendshape_weights_per_cv(curve, blendshape):
-    attr = blendshape + ".inputTarget[0].inputTargetGroup[0].targetWeights[{}]"
-    return [cmds.getAttr(attr.format(i)) for i in range(count_cv(curve))]
+def get_blendshape_weights_per_cv(curve, blendshape, index=0):
+    attr = (
+        blendshape + ".inputTarget[{}].inputTargetGroup[0].targetWeights[{}]")
+    return [
+        cmds.getAttr(attr.format(index, i))
+        for i in range(count_cv(curve))]
 
 
-def set_blendshape_weights_per_cv(curve, blendshape, values):
-    attr = blendshape + ".inputTarget[0].inputTargetGroup[0].targetWeights[{}]"
+def set_blendshape_weights_per_cv(curve, blendshape, values, index=0):
+    attr = (
+        blendshape + ".inputTarget[{}].inputTargetGroup[0].targetWeights[{}]")
     for i, v in enumerate(values):
-        cmds.setAttr(attr.format(i), v)
+        cmds.setAttr(attr.format(index, i), v)
 
 
 def count_cv(curve):
@@ -136,5 +140,9 @@ def count_cv(curve):
 
 
 if __name__ == "__main__":
-    wid = CurveDeformerWeightEditor()
+    import shiboken2
+    import maya.OpenMayaUI as omui
+    main_window = omui.MQtUtil.mainWindow()
+    parent = shiboken2.wrapInstance(long(main_window), QtWidgets.QWidget)
+    wid = CurveDeformerWeightEditor(parent)
     wid.show()
