@@ -34,6 +34,8 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.bezierequalizer.bezierCurveEditEnd.connect(close_undochunk)
 
         self.blendshapes = QtWidgets.QComboBox()
+        method = self._call_blendshape_changed
+        self.blendshapes.currentTextChanged.connect(method)
 
         self.hlayout = QtWidgets.QHBoxLayout()
         self.hlayout.setContentsMargins(0, 0, 0, 0)
@@ -71,6 +73,12 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
             if controlpoint.selected:
                 controlpoint.linear = True
         self.bezierequalizer.repaint()
+
+    def _call_blendshape_changed(self, blendshape):
+        if not blendshape or not self.curves:
+            self.bezierequalizer.setValues([])
+        values = get_blendshape_weights_per_cv(self.curves[0], blendshape)
+        self.bezierequalizer.setValues(values)
 
     def closeEvent(self, event):
         super(CurveDeformerWeightEditor, self).closeEvent(event)
