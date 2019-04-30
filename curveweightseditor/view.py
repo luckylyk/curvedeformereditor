@@ -29,6 +29,7 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.bezierequalizer.setGridVisible(False)
         self.bezierequalizer.setEditableTangents(False)
         self.bezierequalizer.setBodyVisible(True)
+        self.bezierequalizer.setAutotangentMode(BezierEqualizer.Flatten)
         self.bezierequalizer.bezierCurveEdited.connect(self.weightschanged)
         self.bezierequalizer.bezierCurveEditBegin.connect(open_undochunk)
         self.bezierequalizer.bezierCurveEditEnd.connect(close_undochunk)

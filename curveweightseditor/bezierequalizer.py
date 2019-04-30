@@ -1,11 +1,6 @@
-
-
-from PySide2 import QtWidgets, QtCore
-import maya.OpenMaya as om
-from PySide2 import QtWidgets, QtCore, QtGui
-from maya import cmds
 import math
 # from PyQt5 import QtCore, QtGui, QtWidgets
+from PySide2 import QtWidgets, QtCore, QtGui
 
 
 COLORS = {
@@ -27,6 +22,9 @@ class BezierEqualizer(QtWidgets.QWidget):
     bezierCurveEditBegin = QtCore.Signal()
     bezierCurveEditEnd = QtCore.Signal()
 
+    Smoothed = 0
+    Flatten = 1
+
     def __init__(self, parent=None):
         super(BezierEqualizer, self).__init__(parent)
         self.setMouseTracking(True)
@@ -41,6 +39,8 @@ class BezierEqualizer(QtWidgets.QWidget):
         self.grid_horizontal_divisions = 5
         self.grid_vertical_divisions = 25
         self.grid_main_disivions_mult = 4
+        self.auto_tangent_function = auto_tangent_smoothed
+        self.holding = False
 
         self.picked_center = None
         self.picked_tangent = None
@@ -50,21 +50,41 @@ class BezierEqualizer(QtWidgets.QWidget):
         if self.isclicked is False:
             return
 
-        controlpoints = self.controlpoints
-        if self.picked_center:
-            rect = self.rect() if self.picked_center.isboundary else None
-            self.picked_center.move(event.pos(), rect)
-            auto_tangent_beziercurve(controlpoints)
+        if self.editabletangents is True and self.picked_tangent is not None:
+            self.picked_tangent.autotangent = False
+            self.picked_tangent.move_tangent(event.pos())
+            auto_tangent_beziercurve(
+                controlpoints=self.controlpoints,
+                skip=self.picked_tangent,
+                auto_tangent_function=self.auto_tangent_function)
             self.repaint()
             self.bezierCurveEdited.emit()
             return
 
-        if self.editabletangents is False or self.picked_tangent is None:
+        if not self.picked_center:
+            self.repaint()
+            self.bezierCurveEdited.emit()
             return
-
-        self.picked_tangent.autotangent = False
-        self.picked_tangent.move_tangent(event.pos())
-        auto_tangent_beziercurve(controlpoints, self.picked_tangent)
+        rect = self.rect()
+        point = event.pos()
+        cursor = self.mapFromGlobal(QtGui.QCursor.pos())
+        self.picked_center.move(point, rect)
+        offset = (rect.width() + rect.height()) / 10
+        extended_rect = grow_rect(rect, offset)
+        if self.picked_center.isboundary is True:
+            self.repaint()
+            self.bezierCurveEdited.emit()
+            return
+        if not extended_rect.contains(cursor) and self.holding is False:
+            self.controlpoints.remove(self.picked_center)
+            self.holding = True
+        elif extended_rect.contains(cursor) and self.holding is True:
+            self.controlpoints.append(self.picked_center)
+            self.controlpoints = sorted(self.controlpoints)
+            self.holding = False
+        auto_tangent_beziercurve(
+            controlpoints=self.controlpoints,
+            auto_tangent_function=self.auto_tangent_function)
         self.repaint()
         self.bezierCurveEdited.emit()
 
@@ -82,7 +102,8 @@ class BezierEqualizer(QtWidgets.QWidget):
             controlpoint = insert_controlpoint_in_line(point, controlpoints)
             self.controlpoints.append(controlpoint)
             self.controlpoints = sorted(controlpoints)
-            auto_tangent_beziercurve(self.controlpoints)
+            auto_tangent_beziercurve(
+                self.controlpoints, self.auto_tangent_function)
             self.picked_center = controlpoint
 
         if self.picked_center:
@@ -92,13 +113,10 @@ class BezierEqualizer(QtWidgets.QWidget):
         self.bezierCurveEditBegin.emit()
 
     def mouseReleaseEvent(self, _):
-        if self.picked_center:
-            if not self.rect().contains(self.picked_center.center.toPoint()):
-                self.controlpoints.remove(self.picked_center)
-                auto_tangent_beziercurve(self.controlpoints)
         self.isclicked = False
         self.picked_center = None
         self.picked_tangent = None
+        self.holding = False
         self.repaint()
         self.bezierCurveEditEnd.emit()
 
@@ -107,6 +125,7 @@ class BezierEqualizer(QtWidgets.QWidget):
             return
         for controlpoint in self.controlpoints:
             controlpoint.resize(event.oldSize(), event.size())
+        self._check_bonudaries()
         self.repaint()
 
     def paintEvent(self, _):
@@ -190,6 +209,12 @@ class BezierEqualizer(QtWidgets.QWidget):
     def setGridMainDivisionsMult(self, division):
         self.grid_main_disivions_mult = division
 
+    def setAutoTangentMode(self, mode):
+        auto_tangent_functions = [
+            auto_tangent_smoothed,
+            auto_tangent_flatten]
+        self.auto_tangent_function = auto_tangent_functions[mode]
+
 
 ###############################################################################
 ############################## CONTROLPOINT ###################################
@@ -209,6 +234,7 @@ class ControlPoint():
     def move(self, point, rect=None):
         if self.isboundary is True:
             point.setX(self.center.x())
+        if rect is not None:
             clamp_point_in_rect(point, rect)
 
         delta = self.center - point
@@ -271,11 +297,13 @@ def compute_mirror_tangent(center, tangent, child=None):
     return point_on_circle(angle, ray, center)
 
 
-def auto_tangent_beziercurve(controlpoints, skip=None):
+def auto_tangent_beziercurve(
+        controlpoints, skip=None, auto_tangent_function=None):
     """
     This apply the good autotangent function on every controlpoint on a bezier
     curve.
     """
+    auto_tangent_function = auto_tangent_function or auto_tangent_smoothed
     controlpoints = sorted(controlpoints)
     for i, controlpoint in enumerate(controlpoints):
         if controlpoint is skip:
@@ -292,7 +320,7 @@ def auto_tangent_beziercurve(controlpoints, skip=None):
             continue
         before = controlpoints[i - 1]
         after = controlpoints[i + 1]
-        auto_tangent(controlpoint, before, after)
+        auto_tangent_function(controlpoint, before, after)
 
 
 def auto_tangent_boundary_controlpoint(controlpoint, target):
@@ -306,7 +334,7 @@ def auto_tangent_boundary_controlpoint(controlpoint, target):
     controlpoint.move_tangent(tangent)
 
 
-def auto_tangent(controlpoint, before, after):
+def auto_tangent_smoothed(controlpoint, before, after):
     """
     This function create an auto smoothed tangent on a given controlpoint.
     To compute the tangent angle, it use the controle point before and after
@@ -334,6 +362,34 @@ def auto_tangent(controlpoint, before, after):
 
     ray_in = distance(before.center, controlpoint.center) * 0.3
     ray_out = distance(controlpoint.center, after.center) * 0.3
+
+    tangent1 = point_on_circle(angle, ray_out, controlpoint.center)
+    tangent2 = point_on_circle(angle + math.pi, ray_in, controlpoint.center)
+    controlpoint.move_tangent(tangent1, tangent2)
+
+
+def auto_tangent_flatten(controlpoint, before, after):
+    condition = (
+        controlpoint.center.y() >= before.center.y() and
+        controlpoint.center.y() >= after.center.y() or
+        controlpoint.center.y() <= before.center.y() and
+        controlpoint.center.y() <= after.center.y())
+    if condition:
+        angle = 0
+    else:
+        angle1 = compute_angle(before.tangentout, controlpoint.center)
+        angle2 = compute_angle(controlpoint.center, after.tangentin)
+        if abs(angle1) > abs(angle2):
+            angle = angle1
+        else:
+            angle = angle2
+
+    ray_in = distance(before.center, controlpoint.center) * 0.3
+    horizontal = abs(before.center.x() - controlpoint.center.x())
+    ray_in = clamp(ray_in, 0, horizontal)
+    ray_out = distance(controlpoint.center, after.center) * 0.3
+    horizontal = abs(controlpoint.center.x() - after.center.x())
+    ray_out = clamp(ray_out, 0, horizontal)
 
     tangent1 = point_on_circle(angle, ray_out, controlpoint.center)
     tangent2 = point_on_circle(angle + math.pi, ray_in, controlpoint.center)
@@ -448,6 +504,11 @@ def create_beziercurve(values, rect, linear=False):
         controlpoints.append(controlpoint)
     if linear is False:
         auto_tangent_beziercurve(controlpoints)
+    # some offset can appear after resizing the widget which cause some
+    # issues on the limits control point. This ensure that the first
+    # and the last point has the right x value
+    controlpoints[0].center.setX(0)
+    controlpoints[-1].center.setX(rect.right())
     return controlpoints
 
 
@@ -520,9 +581,25 @@ def create_beziercurve_path(controlpoints, rect=None):
     return path
 
 
+def grow_rect(rect, value):
+    return QtCore.QRect(
+        rect.left() - value,
+        rect.top() - value,
+        rect.width() + (value * 2),
+        rect.height() + (value * 2))
+
+
 ###############################################################################
 ################################ ARRAY UTILS ##################################
 ###############################################################################
+
+
+def clamp(value, minimum, maximum):
+    if value > maximum:
+        return maximum
+    if value < minimum:
+        return minimum
+    return value
 
 
 def get_break_indices(array):
@@ -673,8 +750,7 @@ def draw_bezierbody(painter, path, colors=None):
 # if __name__ == "__main__":
 #     app = QtWidgets.QApplication([])
 #     wid = BezierEqualizer()
-#     wid.show()
 #     wid.setValues([0, .5, 1])
+#     wid.setAutoTangentMode(BezierEqualizer.Limited)
+#     wid.show()
 #     app.exec_()
-
-# from curveweighteditor.bezierequalizer import BezierEqualizer
