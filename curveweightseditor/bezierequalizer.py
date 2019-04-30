@@ -148,10 +148,12 @@ class BezierEqualizer(QtWidgets.QWidget):
         return None
 
     def setValues(self, values):
-        if len(values) < 2:
+        if not values:
+            self.controlpoints = []
+        if len(values) == 1:
             raise ValueError('At least 2 values has to be provided')
         rect = self.rect()
-        self.controlpoints = create_beziercurve(values, rect)
+        self.controlpoints = create_beziercurve(values, rect, linear=True)
         self.controlpoints[0].isboundary = True
         self.controlpoints[-1].isboundary = True
         self.repaint()
@@ -432,13 +434,21 @@ def select_controlpoint(selected_controlpoint, controlpoints):
     selected_controlpoint.selected = True
 
 
-def create_beziercurve(values, rect):
+def create_beziercurve(values, rect, linear=False):
     """ TODO: docstring """
     x_pos = split_value(rect.width(), len(values))
     y_pos = [rect.height() * (1 - value) for value in values]
-    cp = [ControlPoint(QtCore.QPointF(x, y)) for x, y in zip(x_pos, y_pos)]
-    auto_tangent_beziercurve(cp)
-    return cp
+    breakpoints_indices = get_break_indices(values)
+    controlpoints = []
+    for i, (x, y) in enumerate(zip(x_pos, y_pos)):
+        if i not in breakpoints_indices:
+            continue
+        controlpoint = ControlPoint(QtCore.QPointF(x, y))
+        controlpoint.linear = linear
+        controlpoints.append(controlpoint)
+    if linear is False:
+        auto_tangent_beziercurve(controlpoints)
+    return controlpoints
 
 
 def move_point_from_resized_rect(point, old_size, new_size):
@@ -513,6 +523,37 @@ def create_beziercurve_path(controlpoints, rect=None):
 ###############################################################################
 ################################ ARRAY UTILS ##################################
 ###############################################################################
+
+
+def get_break_indices(array):
+    """
+    This function parse a list of numerical values (int, long, float).
+    It return the indice in the list where the value is not an linear
+    interpolation of the adjacent values. The 0 and the last index are
+    everytime returned.
+    e.g.
+    |                 .     .
+    |           .            .
+    |      .                  .
+    |  .                       .
+    ___________________________________
+    This will return the indices 0, 3, 4 and 7
+    """
+    break_indexes = []
+    for i, value in enumerate(array):
+        if i == 0:
+            previous_value = value
+            break_indexes.append(i)
+            continue
+        if i == len(array) - 1:
+            break_indexes.append(i)
+            break
+        next_value = array[i + 1]
+        boundarie_average = (next_value + previous_value) / 2.0
+        if abs(value - boundarie_average) > 1e-3:
+            break_indexes.append(i)
+        previous_value = value
+    return break_indexes
 
 
 def split_value(value, sample):

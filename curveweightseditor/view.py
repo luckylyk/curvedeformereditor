@@ -7,7 +7,7 @@ import maya.OpenMaya as om
 
 class CurveDeformerWeightEditor(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        super(CurveDeformerWeightEditor, self).__init__(parent)
+        super(CurveDeformerWeightEditor, self).__init__(parent, QtCore.Qt.Tool)
         self.callbacks = []
         self.curves = []
 
@@ -34,8 +34,7 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.bezierequalizer.bezierCurveEditEnd.connect(close_undochunk)
 
         self.blendshapes = QtWidgets.QComboBox()
-        method = self._call_blendshape_changed
-        self.blendshapes.currentTextChanged.connect(method)
+        self.blendshapes.currentTextChanged.connect(self._call_update_values)
 
         self.hlayout = QtWidgets.QHBoxLayout()
         self.hlayout.setContentsMargins(0, 0, 0, 0)
@@ -46,11 +45,13 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.layout.addLayout(self.hlayout)
         self.layout.addWidget(self.bezierequalizer)
 
+        self.maya_selection_changed()
         self.register_callback()
 
     def show(self):
         super(CurveDeformerWeightEditor, self).show()
         self.register_callback()
+        self.maya_selection_changed()
 
     def _call_smooth_all(self):
         for controlpoint in self.bezierequalizer.controlpoints:
@@ -65,18 +66,20 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
 
     def _call_linear_selected(self):
         for controlpoint in self.bezierequalizer.controlpoints:
-            controlpoint.linear = True
-        self.bezierequalizer.repaint()
-
-    def _call_linear_all(self):
-        for controlpoint in self.bezierequalizer.controlpoints:
             if controlpoint.selected:
                 controlpoint.linear = True
         self.bezierequalizer.repaint()
 
-    def _call_blendshape_changed(self, blendshape):
+    def _call_linear_all(self):
+        for controlpoint in self.bezierequalizer.controlpoints:
+            controlpoint.linear = True
+        self.bezierequalizer.repaint()
+
+    def _call_update_values(self, *_):
+        blendshape = self.blendshapes.currentText()
         if not blendshape or not self.curves:
             self.bezierequalizer.setValues([])
+            return
         values = get_blendshape_weights_per_cv(self.curves[0], blendshape)
         self.bezierequalizer.setValues(values)
 
@@ -105,9 +108,9 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
     def unregister_callback(self):
         for callback in self.callbacks:
             om.MMessage.removeCallback(callback)
-        self._callbacks = []
+        self.callbacks = []
 
-    def maya_selection_changed(self, *callback_args):
+    def maya_selection_changed(self, *_):
         shapes = cmds.ls(
             selection=True, dag=True, long=True, type='nurbsCurve',
             noIntermediate=True)
@@ -117,7 +120,7 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         blendshapes = cmds.ls(cmds.listHistory(self.curves), type='blendShape')
         self.blendshapes.clear()
         self.blendshapes.addItems(blendshapes)
-        self.bezierequalizer.setValues([1, 0])
+        self._call_update_values()
 
 
 def open_undochunk():
