@@ -1,8 +1,10 @@
 
+import maya.OpenMaya as om
 from maya import cmds
 from PySide2 import QtWidgets, QtCore
-from curveweighteditor.bezierequalizer import BezierEqualizer
-import maya.OpenMaya as om
+from curveweightseditor.bezierequalizer import BezierEqualizer
+from curveweightseditor.nurbsutils import (
+    get_blendshape_weights_per_cv, set_blendshape_weights_per_cv, count_cv)
 
 
 class CurveDeformerWeightEditor(QtWidgets.QWidget):
@@ -29,7 +31,7 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.bezierequalizer.setGridVisible(False)
         self.bezierequalizer.setEditableTangents(False)
         self.bezierequalizer.setBodyVisible(True)
-        self.bezierequalizer.setAutotangentMode(BezierEqualizer.Flatten)
+        self.bezierequalizer.setAutoTangentMode(BezierEqualizer.Flatten)
         self.bezierequalizer.bezierCurveEdited.connect(self.weightschanged)
         self.bezierequalizer.bezierCurveEditBegin.connect(open_undochunk)
         self.bezierequalizer.bezierCurveEditEnd.connect(close_undochunk)
@@ -130,31 +132,3 @@ def open_undochunk():
 
 def close_undochunk():
     cmds.undoInfo(closeChunk=True)
-
-
-def get_blendshape_weights_per_cv(curve, blendshape, index=0):
-    attr = (
-        blendshape + ".inputTarget[{}].inputTargetGroup[0].targetWeights[{}]")
-    return [
-        cmds.getAttr(attr.format(index, i))
-        for i in range(count_cv(curve))]
-
-
-def set_blendshape_weights_per_cv(curve, blendshape, values, index=0):
-    attr = (
-        blendshape + ".inputTarget[{}].inputTargetGroup[0].targetWeights[{}]")
-    for i, v in enumerate(values):
-        cmds.setAttr(attr.format(index, i), v)
-
-
-def count_cv(curve):
-    return cmds.getAttr(curve + '.degree') + cmds.getAttr(curve + '.spans')
-
-
-if __name__ == "__main__":
-    import shiboken2
-    import maya.OpenMayaUI as omui
-    main_window = omui.MQtUtil.mainWindow()
-    parent = shiboken2.wrapInstance(long(main_window), QtWidgets.QWidget)
-    wid = CurveDeformerWeightEditor(parent)
-    wid.show()
