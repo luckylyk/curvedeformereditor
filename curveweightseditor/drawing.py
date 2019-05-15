@@ -16,23 +16,6 @@ COLORS = {
 }
 
 
-def vertical_path(rect, x):
-    """
-    This function create a super tiny vertical rectangle on the x coordinate.
-    This is use to find a Y coordinate with X coordinate given on a bezier
-    curve.
-    """
-    point1 = QtCore.QPointF(x, rect.top() - 1e10)
-    point2 = QtCore.QPointF(x, rect.bottom() + 1e10)
-    point3 = QtCore.QPointF(x + 1e-5, rect.bottom() + 1e10)
-    point4 = QtCore.QPointF(x + 1e-5, rect.top() - 1e10)
-    path = QtGui.QPainterPath(point1)
-    path.lineTo(point2)
-    path.lineTo(point3)
-    path.lineTo(point4)
-    return path
-
-
 def create_rect_from_point(center, segment_lenght=8):
     rectangle = QtCore.QRectF(0, 0, segment_lenght, segment_lenght)
     rectangle.moveCenter(center)

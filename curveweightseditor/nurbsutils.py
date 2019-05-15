@@ -49,5 +49,15 @@ def set_blendshape_weights_per_cv(curve, blendshape, values):
         cmds.setAttr(attr.format(index, i), v)
 
 
+def get_cluster_weights_per_cv(curve, cluster):
+    # TODO
+    pass
+
+
+def set_cluster_weights_per_cv(curve, cluster):
+    # TODO
+    pass
+
+
 def count_cv(curve):
     return cmds.getAttr(curve + '.degree') + cmds.getAttr(curve + '.spans')

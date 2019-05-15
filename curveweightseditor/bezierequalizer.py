@@ -156,10 +156,12 @@ class BezierEqualizer(QtWidgets.QWidget):
                 drawtangent=self.editabletangents,
                 colors=self.colors)
 
+    def clear(self):
+        self.controlpoints = []
+
     def values(self, sample):
-        path = create_beziercurve_path(self.controlpoints)
         rect = self.rect()
-        return compute_bezier_curve_values(path, rect, sample)
+        return compute_bezier_curve_values(self.controlpoints[:], rect, sample)
 
     def selectedControlPoint(self):
         for controlpoint in self.controlpoints:
@@ -189,6 +191,11 @@ class BezierEqualizer(QtWidgets.QWidget):
             if key not in self.colors:
                 raise KeyError('{} is not a valid key'.format(key))
         self.colors.update(colors)
+
+    def autoTangent(self):
+        auto_tangent_beziercurve(
+            self.controlpoints, self.auto_tangent_function)
+        self.repaint()
 
     def setRenderHint(self, renderhint):
         self.renderhint = renderhint

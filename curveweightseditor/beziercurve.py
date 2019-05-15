@@ -1,7 +1,7 @@
 import math
-from PySide2 import QtCore
+from PySide2 import QtCore, QtGui
 from curveweightseditor.drawing import (
-    clamp_point_in_rect, vertical_path)
+    clamp_point_in_rect, create_beziercurve_path)
 from curveweightseditor.trigonometry import (
     distance, compute_angle, point_on_circle, move_point_from_resized_rect)
 from curveweightseditor.arrayutils import split_value, clamp, get_break_indices
@@ -182,7 +182,24 @@ def auto_tangent_flatten(controlpoint, before, after):
     controlpoint.move_tangent(tangent1, tangent2)
 
 
-def compute_bezier_curve_values(path, rect, sample):
+def vertical_path(rect, x):
+    """
+    This function create a super tiny vertical rectangle on the x coordinate.
+    This is use to find a Y coordinate with X coordinate given on a bezier
+    curve.
+    """
+    point1 = QtCore.QPointF(x, rect.top() - 1e10)
+    point2 = QtCore.QPointF(x, rect.bottom() + 1e10)
+    point3 = QtCore.QPointF(x + 1e-5, rect.bottom() + 1e10)
+    point4 = QtCore.QPointF(x + 1e-5, rect.top() - 1e10)
+    path = QtGui.QPainterPath(point1)
+    path.lineTo(point2)
+    path.lineTo(point3)
+    path.lineTo(point4)
+    return path
+
+
+def compute_bezier_curve_values(controlpoints, rect, sample):
     """
     This function compute the values drawn by an horizontal bezier curve as
     QPainterPath. Sample give the number of samples are requested.
@@ -192,14 +209,24 @@ def compute_bezier_curve_values(path, rect, sample):
     """
     if sample < 2:
         raise ValueError("At least 2 values can be requested (start and end)")
-
+    # WORKAROUND: if the control points draw a straight line path,
+    # for a strange reason, the intersection algorytm fail ...
+    # To avoid this issue, if the bezier curve contains only two control point,
+    # a third one is created in the middle with a tiny offset to break the line
+    if len(controlpoints) == 2:
+        x = (controlpoints[0].center.x() + controlpoints[-1].center.x()) / 2
+        y = (controlpoints[0].center.y() + controlpoints[-1].center.y()) / 2
+        y += 1e-3
+        controlpoint = ControlPoint(QtCore.QPointF(x, y))
+        controlpoints.insert(1, controlpoint)
     # To find an y coordinate on a horizontal bezier curve from a x coordinate
     # given, we create a vertical really thin rectanglular QPainterPath.
     # Use the QPainterPath.intersected() return a QPainterPath which start
     # exactly on the intersection.
+    path = create_beziercurve_path(controlpoints)
     lines = [vertical_path(rect, x) for x in split_value(rect.width(), sample)]
     intersections = [path.intersected(line) for line in lines]
-    points = [intersection.pointAtPercent(0) for intersection in intersections]
+    points = [intersection.pointAtPercent(1) for intersection in intersections]
     return [1 - (point.y() / rect.height()) for point in points]
 
 
