@@ -5,7 +5,7 @@ Author: Lionel Brouyère
 ### Description  
 Visual bezier equalizer to manager a deformer weight along a curve.
 <center>
-<img src="https://raw.githubusercontent.com/luckylyk/curveweighteditor/master/curveweighteditor.gif" alt="drawing" align="center" width="500"/></center>  
+<img src="https://raw.githubusercontent.com/luckylyk/curvedeformereditor/master/curvedeformereditor.gif" alt="drawing" align="center" width="500"/></center>  
   
 ### Installation  
 place the "curvedeformereditor" folder the into the maya script folder.
