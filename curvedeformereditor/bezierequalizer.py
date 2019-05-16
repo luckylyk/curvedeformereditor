@@ -1,9 +1,9 @@
 import math
 from PySide2 import QtWidgets, QtCore, QtGui
-from curveweightseditor.drawing import (
+from curvedeformereditor.drawing import (
     draw_background, draw_bezierpath, draw_controlpoint, draw_grid, COLORS,
     grow_rect, create_beziercurve_path, draw_bezierbody)
-from curveweightseditor.beziercurve import (
+from curvedeformereditor.beziercurve import (
     pick_controlpoint_center, auto_tangent_smoothed, auto_tangent_beziercurve,
     pick_controlpoint_tangent, insert_controlpoint_in_curve,
     select_controlpoint, auto_tangent_flatten, create_beziercurve,

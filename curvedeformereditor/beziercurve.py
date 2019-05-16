@@ -1,10 +1,10 @@
 import math
 from PySide2 import QtCore, QtGui
-from curveweightseditor.drawing import (
+from curvedeformereditor.drawing import (
     clamp_point_in_rect, create_beziercurve_path)
-from curveweightseditor.trigonometry import (
+from curvedeformereditor.trigonometry import (
     distance, compute_angle, point_on_circle, move_point_from_resized_rect)
-from curveweightseditor.arrayutils import split_value, clamp, get_break_indices
+from curvedeformereditor.arrayutils import split_value, clamp, get_break_indices
 
 
 class ControlPoint():
@@ -227,7 +227,12 @@ def compute_bezier_curve_values(controlpoints, rect, sample):
     lines = [vertical_path(rect, x) for x in split_value(rect.width(), sample)]
     intersections = [path.intersected(line) for line in lines]
     points = [intersection.pointAtPercent(1) for intersection in intersections]
-    return [1 - (point.y() / rect.height()) for point in points]
+    values = [1 - (point.y() / rect.height()) for point in points]
+    # the first and the last values are not all the time well evaluate with the
+    # intersection method, so we compute them separately.
+    values[0] = 1 - controlpoints[0].center.y() / rect.height()
+    values[-1] = 1 - controlpoints[-1].center.y() / rect.height()
+    return values
 
 
 def create_beziercurve(values, rect, linear=False):

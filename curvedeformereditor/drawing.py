@@ -1,18 +1,19 @@
 from PySide2 import QtCore, QtGui
-from curveweightseditor.arrayutils import split_value
+from curvedeformereditor.arrayutils import split_value
 
 
 COLORS = {
-    'controlpoint.center': 'yellow',
-    'controlpoint.centerselected': 'white',
+    'controlpoint.center': 'white',
+    'controlpoint.centerselected': 'yellow',
     'controlpoint.tangentlocked': 'orange',
     'controlpoint.autotangent': 'red',
     'background.color': '#222222',
     'background.border': '#222222',
     'background.griddark': '#111111',
     'background.gridlight': '#353535',
-    'bezier.border': 'red',
-    'bezier.body': 'grey'
+    'bezier.border': '#151515',
+    'bezier.body': 'grey',
+    'bezier.borderwidth': 3
 }
 
 
@@ -146,8 +147,10 @@ def draw_controlpoint(painter, controlpoint, drawtangent=True, colors=None):
 def draw_bezierpath(painter, path, colors=None):
     colors = colors or COLORS.copy()
     brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+    pen = QtGui.QPen(QtGui.QColor(colors['bezier.border']))
+    pen.setWidth(colors['bezier.borderwidth'])
     painter.setBrush(brush)
-    painter.setPen(QtGui.QColor(colors['bezier.border']))
+    painter.setPen(pen)
     painter.drawPath(path)
 
 

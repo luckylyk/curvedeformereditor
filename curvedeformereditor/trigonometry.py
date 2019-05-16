@@ -1,6 +1,6 @@
 import math
 from PySide2 import QtCore
-from curveweightseditor.arrayutils import split_value, get_break_indices
+from curvedeformereditor.arrayutils import split_value, get_break_indices
 
 
 def compute_ray_limit(angle, point1, point2):

@@ -2,9 +2,13 @@ import os
 import maya.OpenMaya as om
 from maya import cmds
 from PySide2 import QtWidgets, QtCore, QtGui
-from curveweightseditor.bezierequalizer import BezierEqualizer
-from curveweightseditor.nurbsutils import (
-    get_blendshape_weights_per_cv, set_blendshape_weights_per_cv, count_cv)
+from curvedeformereditor.bezierequalizer import BezierEqualizer
+from curvedeformereditor.nurbsutils import (
+    get_deformer_weights_per_cv, set_deformer_weights_per_cv, count_cv)
+
+
+SUPPORTED_DEFORMERS = 'blendShape', 'cluster'
+WINDOW_TITLE = 'Curve Deformer Editor'
 
 
 def icon(filename):
@@ -13,23 +17,35 @@ def icon(filename):
     return QtGui.QIcon(path)
 
 
-class CurveDeformerWeightEditor(QtWidgets.QWidget):
+class CurveDeformerEditor(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
-        super(CurveDeformerWeightEditor, self).__init__(parent, QtCore.Qt.Tool)
+        super(CurveDeformerEditor, self).__init__(parent, QtCore.Qt.Tool)
+        self.setWindowTitle(WINDOW_TITLE)
+
         self.controlpoints_per_deformers = {}
         self.callbacks = []
+        self.reset_memory_callbacks = None
         self.curves = []
 
-        self.linear_selected = QtWidgets.QAction('linear', self)
+        img = icon('linear_selected.png')
+        self.linear_selected = QtWidgets.QAction(img, '', self)
+        self.linear_selected.setToolTip('linear selected')
         self.linear_selected.triggered.connect(self._call_linear_selected)
-        self.smooth_selected = QtWidgets.QAction('smooth', self)
+        img = icon('smooth_selected.png')
+        self.smooth_selected = QtWidgets.QAction(img, '', self)
+        self.smooth_selected.setToolTip('smooth selected')
         self.smooth_selected.triggered.connect(self._call_smooth_selected)
-        self.linear_all = QtWidgets.QAction('linear all', self)
+        img = icon('linear_all.png')
+        self.linear_all = QtWidgets.QAction(img, '', self)
+        self.linear_all.setToolTip('linear all')
         self.linear_all.triggered.connect(self._call_linear_all)
-        self.smooth_all = QtWidgets.QAction('smooth all', self)
+        img = icon('smooth_all.png')
+        self.smooth_all = QtWidgets.QAction(img, '', self)
+        self.smooth_all.setToolTip('smooth all')
         self.smooth_all.triggered.connect(self._call_smooth_all)
         self.toolbar = QtWidgets.QToolBar()
+        self.toolbar.setIconSize(QtCore.QSize(20, 20))
         self.toolbar.addAction(self.linear_selected)
         self.toolbar.addAction(self.smooth_selected)
         self.toolbar.addAction(self.linear_all)
@@ -44,8 +60,8 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.bezierequalizer.bezierCurveEditBegin.connect(open_undochunk)
         self.bezierequalizer.bezierCurveEditEnd.connect(close_undochunk)
 
-        self.blendshapes = QtWidgets.QComboBox()
-        self.blendshapes.currentTextChanged.connect(self._call_update_values)
+        self.deformers = QtWidgets.QComboBox()
+        self.deformers.currentTextChanged.connect(self._call_update_values)
 
         self.smooth_in = QtWidgets.QAction(icon('smooth_in.png'), '', self)
         self.smooth_in.triggered.connect(self._call_smooth_in)
@@ -78,7 +94,7 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.hlayout = QtWidgets.QHBoxLayout()
         self.hlayout.setContentsMargins(0, 0, 0, 0)
         self.hlayout.addWidget(self.toolbar)
-        self.hlayout.addWidget(self.blendshapes)
+        self.hlayout.addWidget(self.deformers)
 
         self.layout = QtWidgets.QVBoxLayout(self)
         self.layout.addLayout(self.hlayout)
@@ -89,7 +105,7 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.register_callback()
 
     def show(self):
-        super(CurveDeformerWeightEditor, self).show()
+        super(CurveDeformerEditor, self).show()
         self.register_callback()
         self.maya_selection_changed()
 
@@ -120,19 +136,19 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.weightschanged()
 
     def _call_update_values(self, *_):
-        blendshape = self.blendshapes.currentText()
-        if not blendshape or not self.curves:
+        deformer = self.deformers.currentText()
+        if not deformer or not self.curves:
             self.bezierequalizer.setValues([])
             return
         # TODO: Doc, eplain this
-        curves = self.controlpoints_per_deformers.get(blendshape)
+        curves = self.controlpoints_per_deformers.get(deformer)
         if curves:
             controlpoints = curves[self.curves[0]]
             if controlpoints:
                 self.bezierequalizer.controlpoints = controlpoints
                 self.bezierequalizer.repaint()
                 return
-        values = get_blendshape_weights_per_cv(self.curves[0], blendshape)
+        values = get_deformer_weights_per_cv(self.curves[0], deformer)
         self.bezierequalizer.setValues(values)
 
     def _call_smooth_in(self):
@@ -176,39 +192,49 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
         self.weightschanged()
 
     def closeEvent(self, event):
-        super(CurveDeformerWeightEditor, self).closeEvent(event)
+        super(CurveDeformerEditor, self).closeEvent(event)
         self.unregister_callback()
 
     def hide(self):
-        super(CurveDeformerWeightEditor, self).hide()
+        super(CurveDeformerEditor, self).hide()
         self.unregister_callback()
 
     def weightschanged(self):
-        blendshape = self.blendshapes.currentText()
-        if not blendshape:
+        deformer = self.deformers.currentText()
+        if not deformer:
             return
         for curve in self.curves:
             sample = count_cv(curve)
             weights = self.bezierequalizer.values(sample)
-            set_blendshape_weights_per_cv(curve, blendshape, weights)
+            set_deformer_weights_per_cv(curve, deformer, weights)
         # TODO: Doc, eplain this
         cp = self.bezierequalizer.controlpoints
-        if not self.controlpoints_per_deformers.get(blendshape):
-            self.controlpoints_per_deformers[blendshape] = {}
-        self.controlpoints_per_deformers[blendshape][self.curves[0]] = cp
+        if not self.controlpoints_per_deformers.get(deformer):
+            self.controlpoints_per_deformers[deformer] = {}
+        self.controlpoints_per_deformers[deformer][self.curves[0]] = cp
 
     def register_callback(self):
         method = self.maya_selection_changed
         cb = om.MEventMessage.addEventCallback('SelectionChanged', method)
         self.callbacks.append(cb)
+        if self.reset_memory_callbacks is not None:
+            return
+        self.reset_memory_callbacks = []
+        events = om.MSceneMessage.kBeforeNew, om.MSceneMessage.kBeforeOpen
+        for event in events:
+            cb = om.MSceneMessage.addCallback(event, self.reset_memory)
+            self.reset_memory_callbacks.append(cb)
 
     def unregister_callback(self):
         for callback in self.callbacks:
             om.MMessage.removeCallback(callback)
         self.callbacks = []
 
+    def reset_memory(self, *_):
+        self.controlpoints_per_deformers = {}
+
     def maya_selection_changed(self, *_):
-        self.blendshapes.clear()
+        self.deformers.clear()
         shapes = cmds.ls(
             selection=True, dag=True, long=True, type='nurbsCurve',
             noIntermediate=True)
@@ -218,8 +244,9 @@ class CurveDeformerWeightEditor(QtWidgets.QWidget):
             self.setEnabled(False)
             return
         self.setEnabled(True)
-        blendshapes = cmds.ls(cmds.listHistory(self.curves), type='blendShape')
-        self.blendshapes.addItems(blendshapes)
+        history = cmds.listHistory(self.curves)
+        deformers = cmds.ls(history, type=SUPPORTED_DEFORMERS)
+        self.deformers.addItems(deformers)
         self._call_update_values()
 
 
