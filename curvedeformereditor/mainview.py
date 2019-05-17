@@ -2,7 +2,8 @@ import os
 import maya.OpenMaya as om
 from maya import cmds
 from PySide2 import QtWidgets, QtCore, QtGui
-from curvedeformereditor.bezierequalizer import BezierEqualizer
+from curvedeformereditor.bezierequalizer import (
+    BezierEqualizer, copy_bezier_curve)
 from curvedeformereditor.nurbsutils import (
     get_deformer_weights_per_cv, set_deformer_weights_per_cv, count_cv)
 
@@ -33,7 +34,7 @@ class CurveDeformerEditor(QtWidgets.QWidget):
         # is unselected and reselected after.
         self.reset_memory_callbacks = None
         self.controlpoints_per_deformers = {}
-        
+
         img = icon('linear_selected.png')
         self.linear_selected = QtWidgets.QAction(img, '', self)
         self.linear_selected.setToolTip('linear selected')
@@ -151,7 +152,7 @@ class CurveDeformerEditor(QtWidgets.QWidget):
         # current deformer weights.
         curves = self.controlpoints_per_deformers.get(deformer)
         if curves:
-            controlpoints = curves[self.curves[0]]
+            controlpoints = curves.get(self.curves[0])
             if controlpoints:
                 self.bezierequalizer.controlpoints = controlpoints
                 self.bezierequalizer.repaint()
@@ -217,10 +218,11 @@ class CurveDeformerEditor(QtWidgets.QWidget):
             set_deformer_weights_per_cv(curve, deformer, weights)
         # We store the edited control points in the widgets memories to reedit
         # the weights later.
-        cp = self.bezierequalizer.controlpoints
         if self.controlpoints_per_deformers.get(deformer) is None:
             self.controlpoints_per_deformers[deformer] = {}
-        self.controlpoints_per_deformers[deformer][self.curves[0]] = cp
+        for curve in self.curves:
+            bezier = copy_bezier_curve(self.bezierequalizer.controlpoints)
+            self.controlpoints_per_deformers[deformer][curve] = bezier
 
     def register_callback(self):
         method = self.maya_selection_changed

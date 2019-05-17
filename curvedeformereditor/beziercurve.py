@@ -261,3 +261,15 @@ def select_controlpoint(selected_controlpoint, controlpoints):
     for controlpoint in controlpoints:
         controlpoint.selected = False
     selected_controlpoint.selected = True
+
+
+def copy_bezier_curve(controlpoints):
+    bezier = []
+    for controlpoint in controlpoints:
+        bezier.append(ControlPoint(
+            center=QtCore.QPointF(controlpoint.center),
+            tangentin=QtCore.QPointF(controlpoint.tangentin),
+            tangentout=QtCore.QPointF(controlpoint.tangentout)))
+    bezier[0].isboundary = True
+    bezier[-1].isboundary = True
+    return bezier
