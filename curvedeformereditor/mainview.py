@@ -22,12 +22,18 @@ class CurveDeformerEditor(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(CurveDeformerEditor, self).__init__(parent, QtCore.Qt.Tool)
         self.setWindowTitle(WINDOW_TITLE)
-
-        self.controlpoints_per_deformers = {}
         self.callbacks = []
-        self.reset_memory_callbacks = None
         self.curves = []
 
+        # This dictionary backup the control points used to edit a deformer
+        # weights. It allow to save a bezier curve per nurbs curve.
+        # It's use full because weights are stored with a different format in
+        # the maya nodes and the result is different when the curve is
+        # generated for the maya data. This keep the controlpoints if a curve
+        # is unselected and reselected after.
+        self.reset_memory_callbacks = None
+        self.controlpoints_per_deformers = {}
+        
         img = icon('linear_selected.png')
         self.linear_selected = QtWidgets.QAction(img, '', self)
         self.linear_selected.setToolTip('linear selected')
@@ -140,7 +146,9 @@ class CurveDeformerEditor(QtWidgets.QWidget):
         if not deformer or not self.curves:
             self.bezierequalizer.setValues([])
             return
-        # TODO: Doc, eplain this
+        # if the deformer was already edited in the current session, this get
+        # his saved controlpoints. If it's not, it generate controlpoints from
+        # current deformer weights.
         curves = self.controlpoints_per_deformers.get(deformer)
         if curves:
             controlpoints = curves[self.curves[0]]
@@ -207,9 +215,10 @@ class CurveDeformerEditor(QtWidgets.QWidget):
             sample = count_cv(curve)
             weights = self.bezierequalizer.values(sample)
             set_deformer_weights_per_cv(curve, deformer, weights)
-        # TODO: Doc, eplain this
+        # We store the edited control points in the widgets memories to reedit
+        # the weights later.
         cp = self.bezierequalizer.controlpoints
-        if not self.controlpoints_per_deformers.get(deformer):
+        if self.controlpoints_per_deformers.get(deformer) is None:
             self.controlpoints_per_deformers[deformer] = {}
         self.controlpoints_per_deformers[deformer][self.curves[0]] = cp
 
