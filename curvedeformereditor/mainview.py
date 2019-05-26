@@ -2,10 +2,10 @@ import os
 import maya.OpenMaya as om
 from maya import cmds
 from PySide2 import QtWidgets, QtCore, QtGui
-from curvedeformereditor.bezierequalizer import (
-    BezierEqualizer, copy_bezier_curve)
+from curvedeformereditor.bezierequalizer import BezierEqualizer
 from curvedeformereditor.nurbsutils import (
-    get_deformer_weights_per_cv, set_deformer_weights_per_cv, count_cv)
+    get_deformer_weights_per_cv, set_deformer_weights_per_cv, count_cv,
+    copy_bezier_curve)
 
 
 SUPPORTED_DEFORMERS = 'blendShape', 'cluster'
