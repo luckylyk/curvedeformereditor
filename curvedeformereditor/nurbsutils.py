@@ -4,7 +4,8 @@ from maya import cmds
 
 TARGETWEIGHT_ATTR = {
     "blendShape": "inputTarget[{0}].inputTargetGroup[{0}].targetWeights[{1}]",
-    "cluster": "weightList[{0}].weights[{1}]"
+    "cluster": "weightList[{0}].weights[{1}]",
+    "skinCluster": "weightList[{0}].weights[{1}]"
 }
 
 

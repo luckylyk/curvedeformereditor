@@ -3,12 +3,12 @@ import maya.OpenMaya as om
 from maya import cmds
 from PySide2 import QtWidgets, QtCore, QtGui
 from curvedeformereditor.bezierequalizer import BezierEqualizer
+from curvedeformereditor.beziercurve import copy_bezier_curve
 from curvedeformereditor.nurbsutils import (
-    get_deformer_weights_per_cv, set_deformer_weights_per_cv, count_cv,
-    copy_bezier_curve)
+    get_deformer_weights_per_cv, set_deformer_weights_per_cv, count_cv)
 
 
-SUPPORTED_DEFORMERS = 'blendShape', 'cluster'
+SUPPORTED_DEFORMERS = 'blendShape', 'cluster', 'skinCluster'
 WINDOW_TITLE = 'Curve Deformer Editor'
 
 
